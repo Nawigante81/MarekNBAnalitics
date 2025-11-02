@@ -1,0 +1,331 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  Target, 
+  DollarSign, 
+  Clock,
+  Users,
+  Activity,
+  AlertTriangle,
+  Trophy,
+  Zap,
+  BarChart3
+} from 'lucide-react';
+
+interface DashboardProps {}
+
+interface GameData {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  time: string;
+  spread: number;
+  total: number;
+  homeOdds: number;
+  awayOdds: number;
+}
+
+interface TeamStats {
+  team: string;
+  record: string;
+  ats: string;
+  ou: string;
+  trend: 'up' | 'down' | 'neutral';
+}
+
+const Dashboard: React.FC<DashboardProps> = () => {
+  const [todayGames, setTodayGames] = useState<GameData[]>([]);
+  const [focusTeams, setFocusTeams] = useState<TeamStats[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate data fetching
+    const fetchData = async () => {
+      setLoading(true);
+      
+      // Simulate API calls
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setTodayGames([
+        {
+          id: '1',
+          homeTeam: 'Chicago Bulls',
+          awayTeam: 'Los Angeles Lakers',
+          time: '8:00 PM EST',
+          spread: -2.5,
+          total: 225.5,
+          homeOdds: -120,
+          awayOdds: +100
+        },
+        {
+          id: '2',
+          homeTeam: 'Boston Celtics',
+          awayTeam: 'Miami Heat',
+          time: '7:30 PM EST',
+          spread: -5.5,
+          total: 218.5,
+          homeOdds: -240,
+          awayOdds: +200
+        },
+        {
+          id: '3',
+          homeTeam: 'Golden State Warriors',
+          awayTeam: 'Sacramento Kings',
+          time: '10:30 PM EST',
+          spread: -3.5,
+          total: 232.5,
+          homeOdds: -160,
+          awayOdds: +140
+        }
+      ]);
+
+      setFocusTeams([
+        { team: 'Bulls', record: '8-12', ats: '9-11', ou: '12-8', trend: 'up' },
+        { team: 'Celtics', record: '16-4', ats: '13-7', ou: '11-9', trend: 'up' },
+        { team: 'Lakers', record: '12-8', ats: '10-10', ou: '13-7', trend: 'down' },
+        { team: 'Warriors', record: '10-10', ats: '8-12', ou: '14-6', trend: 'neutral' },
+        { team: 'Kings', record: '11-9', ats: '12-8', ou: '10-10', trend: 'up' }
+      ]);
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  const StatCard = ({ value, subtitle, icon: Icon, trend, color }: any) => (
+    <div className="glass-card p-6 hover:bg-white/10 transition-all duration-300">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-3 rounded-lg ${color}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+        {trend && (
+          <div className={`flex items-center space-x-1 ${
+            trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-yellow-400'
+          }`}>
+            {trend === 'up' ? <TrendingUp className="w-4 h-4" /> : 
+             trend === 'down' ? <TrendingDown className="w-4 h-4" /> : 
+             <Activity className="w-4 h-4" />}
+          </div>
+        )}
+      </div>
+      <div className="text-2xl font-bold text-white mb-1">{value}</div>
+      <div className="text-sm text-gray-400">{subtitle}</div>
+    </div>
+  );
+
+  const GameCard = ({ game }: { game: GameData }) => (
+    <div className="glass-card p-4 hover:neon-border transition-all duration-300">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-gray-400">{game.time}</div>
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <span className="text-xs text-gray-400">Live</span>
+        </div>
+      </div>
+      
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center justify-between">
+          <span className={`font-semibold ${
+            game.homeTeam.includes('Bulls') ? 'text-red-400' : 'text-white'
+          }`}>
+            {game.homeTeam}
+          </span>
+          <span className="text-gray-300">{game.homeOdds > 0 ? '+' : ''}{game.homeOdds}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-300">{game.awayTeam}</span>
+          <span className="text-gray-300">{game.awayOdds > 0 ? '+' : ''}{game.awayOdds}</span>
+        </div>
+      </div>
+
+      <div className="flex justify-between text-sm border-t border-gray-700/50 pt-3">
+        <div className="text-center">
+          <div className="text-gray-400">Spread</div>
+          <div className="text-white font-semibold">
+            {game.spread > 0 ? '+' : ''}{game.spread}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="text-gray-400">Total</div>
+          <div className="text-white font-semibold">{game.total}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Today's Games"
+          value={todayGames.length}
+          subtitle="Games scheduled"
+          icon={Trophy}
+          color="bg-blue-600"
+        />
+        <StatCard
+          title="Focus Teams"
+          value="9"
+          subtitle="Teams tracked"
+          icon={Users}
+          color="bg-green-600"
+        />
+        <StatCard
+          title="Bulls Record"
+          value="8-12"
+          subtitle="This season"
+          icon={Target}
+          trend="up"
+          color="bg-red-600"
+        />
+        <StatCard
+          title="Active Bets"
+          value="3"
+          subtitle="Value opportunities"
+          icon={DollarSign}
+          trend="up"
+          color="bg-yellow-600"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's Games */}
+        <div className="lg:col-span-2">
+          <div className="glass-card">
+            <div className="p-6 border-b border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                  <Clock className="w-5 h-5 text-blue-400" />
+                  <span>Today's Games</span>
+                </h2>
+                <span className="text-sm text-gray-400">{todayGames.length} games</span>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              {todayGames.map((game) => (
+                <GameCard key={game.id} game={game} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Focus Teams Performance */}
+        <div>
+          <div className="glass-card">
+            <div className="p-6 border-b border-gray-700/50">
+              <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-green-400" />
+                <span>Focus Teams</span>
+              </h2>
+            </div>
+            <div className="p-6 space-y-4">
+              {focusTeams.map((team) => (
+                <div key={team.team} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-lg transition-colors">
+                  <div>
+                    <div className={`font-semibold ${
+                      team.team === 'Bulls' ? 'text-red-400' : 'text-white'
+                    }`}>
+                      {team.team}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {team.record} • ATS: {team.ats}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`px-2 py-1 rounded text-xs ${
+                      team.trend === 'up' ? 'bg-green-600/20 text-green-400' :
+                      team.trend === 'down' ? 'bg-red-600/20 text-red-400' :
+                      'bg-yellow-600/20 text-yellow-400'
+                    }`}>
+                      {team.ou}
+                    </div>
+                    {team.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> :
+                     team.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-400" /> :
+                     <Activity className="w-4 h-4 text-yellow-400" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bulls Spotlight */}
+      <div className="glass-card">
+        <div className="p-6 border-b border-gray-700/50">
+          <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+            <Target className="w-5 h-5 text-red-400" />
+            <span>Bulls Spotlight</span>
+            <div className="ml-auto flex items-center space-x-2">
+              <Zap className="w-4 h-4 text-yellow-400" />
+              <span className="text-sm text-gray-400">Live Analysis</span>
+            </div>
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-400 mb-2">vs Lakers</div>
+              <div className="text-gray-400">Tonight 8:00 PM</div>
+              <div className="text-sm text-gray-500 mt-2">Home underdog -2.5</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white mb-2">Last 5</div>
+              <div className="text-green-400">3-2 ATS</div>
+              <div className="text-sm text-gray-500 mt-2">Strong recent form</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white mb-2">Key Players</div>
+              <div className="text-yellow-400">All healthy</div>
+              <div className="text-sm text-gray-500 mt-2">Full rotation available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk Alerts */}
+      <div className="glass-card border-yellow-400/20">
+        <div className="p-6 border-b border-gray-700/50">
+          <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-400" />
+            <span>Risk Alerts</span>
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3 p-3 bg-yellow-600/10 border border-yellow-600/20 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+              <div>
+                <div className="text-white font-medium">Line Movement Alert</div>
+                <div className="text-sm text-gray-400">Bulls spread moved from -1.5 to -2.5 (30min ago)</div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3 p-3 bg-blue-600/10 border border-blue-600/20 rounded-lg">
+              <Activity className="w-5 h-5 text-blue-400 flex-shrink-0" />
+              <div>
+                <div className="text-white font-medium">Volume Spike</div>
+                <div className="text-sm text-gray-400">Heavy action on Lakers +2.5 across books</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
