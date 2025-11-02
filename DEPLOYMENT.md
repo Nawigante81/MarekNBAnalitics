@@ -49,6 +49,13 @@ npm install -g pm2
 # Choose option 2 for PM2
 ```
 
+#### Option C: Raspberry Pi 4 ARM64 (Special)
+```bash
+# For Pi4 with ARM64 architecture
+chmod +x deploy-pi4-arm64.sh
+./deploy-pi4-arm64.sh
+```
+
 #### Option C: Quick Start
 ```bash
 chmod +x start.sh
@@ -120,7 +127,19 @@ sudo ufw --force enable
 sudo ufw status verbose
 ```
 
-### 3. Nginx Reverse Proxy
+### 3. Reverse Proxy Setup
+
+#### Option A: Caddy (Recommended - Auto SSL)
+```bash
+# Run Caddy deployment script
+chmod +x deploy-caddy.sh caddy-manage.sh
+./deploy-caddy.sh
+
+# Management
+./caddy-manage.sh
+```
+
+#### Option B: Nginx (Manual SSL)  
 ```bash
 # Copy production nginx config
 sudo cp nginx-production.conf /etc/nginx/sites-available/nba-analytics
