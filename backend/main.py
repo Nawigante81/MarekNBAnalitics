@@ -371,3 +371,14 @@ async def get_performance_metrics():
     except Exception as e:
         logger.error(f"Error calculating performance metrics: {e}")
         raise HTTPException(status_code=500, detail="Failed to calculate performance metrics")
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for load balancers and monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "nba-analytics-backend",
+        "version": "1.0.0"
+    }
