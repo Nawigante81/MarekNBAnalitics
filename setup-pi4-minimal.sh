@@ -289,7 +289,12 @@ $LOCAL_IP, localhost {
     
     # Basic logging
     log {
-        output file /var/log/caddy/access.log
+        output file /var/log/caddy/access.log {
+            roll_size 10MiB
+            roll_keep 3
+            roll_keep_for 168h
+        }
+        format console
     }
 }
 EOF

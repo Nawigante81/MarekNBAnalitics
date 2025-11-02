@@ -570,7 +570,6 @@ ${DOMAIN_NAME} {
             header_up Host {upstream_hostport}
             header_up X-Real-IP {remote_addr}
             header_up X-Forwarded-For {remote_addr}
-            header_up X-Forwarded-Proto {scheme}
 
             # ARM64 timeout settings
             transport http {
@@ -597,7 +596,12 @@ ${DOMAIN_NAME} {
 
     # Simplified logging for ARM64
     log {
-        output file /var/log/caddy/nba-analytics.log
+        output file /var/log/caddy/nba-analytics.log {
+            roll_size 10MiB
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        format console
         level WARN
     }
 }
