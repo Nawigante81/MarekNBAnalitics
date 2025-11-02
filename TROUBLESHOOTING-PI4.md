@@ -95,21 +95,62 @@ tar -xJf node-v${NODE_VERSION}-linux-arm64.tar.xz
 sudo cp -r node-v${NODE_VERSION}-linux-arm64/* /usr/local/
 rm -rf node-v${NODE_VERSION}-linux-arm64*
 
+# Fix permissions for proper execution
+sudo chown -R root:root /usr/local/bin/node /usr/local/bin/npm
+sudo chmod 755 /usr/local/bin/node /usr/local/bin/npm
+sudo mkdir -p /usr/local/lib/node_modules
+sudo chown -R $USER:$USER /usr/local/lib/node_modules
+
 # Verify installation
 node --version
 npm --version
 ```
 
-### Python Packages for ARM64
+### Fix "vite: Permission denied" Error
 ```bash
-# Use pre-compiled wheels when possible
-pip3 install --prefer-binary --timeout=300 fastapi uvicorn
+# Fix Node.js permissions
+sudo chown -R $USER:$USER /usr/local/lib/node_modules
+sudo chmod -R 755 /usr/local/bin/node /usr/local/bin/npm
+
+# Fix local node_modules permissions
+chmod -R 755 node_modules/.bin
+
+# Use npx instead of direct execution
+npx vite build
+
+# OR run vite directly if npx fails
+./node_modules/.bin/vite build
+```
+
+### Python Packages for ARM64
+
+#### Virtual Environment Usage (Recommended)
+Scripts now create venv in user directory to avoid permission issues:
+
+```bash
+# Virtual environment location
+~/nba-analytics-venv/
+
+# Activate manually if needed
+source ~/nba-analytics-venv/bin/activate
+
+# Install packages in venv
+pip install --prefer-binary --timeout=300 fastapi uvicorn
+
+# Use specific ARM64 requirements
+pip install -r backend/requirements-pi4.txt
+
+# Deactivate when done
+deactivate
+```
+
+#### Legacy System-wide Installation (Not Recommended)
+```bash
+# Only if virtual environment fails
+pip3 install --user --prefer-binary --timeout=300 fastapi uvicorn
 
 # If compilation fails, install build dependencies
 sudo apt-get install python3-dev build-essential libffi-dev libssl-dev
-
-# Use specific ARM64 requirements
-pip3 install -r backend/requirements-pi4.txt
 ```
 
 ## Network Issues

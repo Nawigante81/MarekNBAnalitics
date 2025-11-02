@@ -189,11 +189,17 @@ if ! command -v node &> /dev/null; then
             sudo tar -xJf node.tar.xz -C /usr/local --strip-components=1
             rm node.tar.xz
             
+            # Fix permissions for manually installed Node.js
+            sudo chown -R root:root /usr/local/bin/node /usr/local/bin/npm
+            sudo chmod 755 /usr/local/bin/node /usr/local/bin/npm
+            sudo mkdir -p /usr/local/lib/node_modules
+            sudo chown -R $USER:$USER /usr/local/lib/node_modules
+            
             # Add to PATH
             export PATH="/usr/local/bin:$PATH"
             echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
             
-            print_status "Node.js installed manually"
+            print_status "Node.js installed manually with proper permissions"
         fi
     fi
     
@@ -221,8 +227,32 @@ print_step "Setting up Python environment..."
 PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
 print_status "Python version: $PYTHON_VERSION"
 
-# Install optimized Python packages for ARM64
-python3 -m pip install --user --upgrade pip setuptools wheel
+# Install python3-venv if not available
+if ! python3 -m venv --help &> /dev/null; then
+    print_status "Installing python3-venv..."
+    sudo apt-get install -y python3-venv python3-full || {
+        print_warning "Failed to install python3-venv, trying alternative..."
+        sudo apt-get install -y python3.11-venv || true
+    }
+fi
+
+# Create virtual environment in user directory first
+USER_VENV_PATH="$HOME/nba-analytics-venv"
+print_step "Creating Python virtual environment in user directory..."
+if [ ! -d "$USER_VENV_PATH" ]; then
+    python3 -m venv "$USER_VENV_PATH" || {
+        print_error "Failed to create virtual environment"
+        exit 1
+    }
+    print_status "✅ Virtual environment created in $USER_VENV_PATH"
+else
+    print_status "Virtual environment already exists in $USER_VENV_PATH"
+fi
+
+# Activate virtual environment and upgrade pip
+print_step "Setting up virtual environment..."
+source "$USER_VENV_PATH/bin/activate"
+python -m pip install --upgrade pip setuptools wheel
 
 # Install Caddy for ARM64
 print_step "Installing Caddy for ARM64..."
@@ -364,16 +394,27 @@ sudo chown -R caddy:caddy /var/log/caddy
 print_step "Installing application dependencies (ARM64 optimized)..."
 
 # Frontend dependencies
-print_status "Installing frontend dependencies..."
-# Use longer timeout for ARM64
-npm install --timeout=300000
+    echo "[INFO] Installing frontend dependencies..."
+    npm install
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Failed to install frontend dependencies!"
+        exit 1
+    fi
+    
+    echo "[INFO] Installing terser for production builds..."
+    npm install --save-dev terser
+    if [ $? -ne 0 ]; then
+        echo "[WARNING] Failed to install terser, build may fail!"
+    fi
 
 # Backend dependencies with ARM64-specific wheels
 print_status "Installing backend dependencies..."
 cd backend
 
-# Create requirements-arm64.txt with optimized packages
-cat > requirements-arm64.txt << EOF
+# Use existing requirements-pi4.txt or create it
+if [ ! -f "requirements-pi4.txt" ]; then
+    print_status "Creating ARM64 optimized requirements..."
+    cat > requirements-pi4.txt << EOF
 # ARM64 optimized requirements for NBA Analytics
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -401,17 +442,83 @@ certifi==2025.10.5
 charset-normalizer==3.4.4
 idna==3.11
 urllib3==2.5.0
-EOF
 
-# Install with ARM64 optimizations
-python3 -m pip install --user --timeout=300 -r requirements-arm64.txt
+# Additional ARM64 optimizations
+psycopg2-binary==2.9.9
+redis==5.0.1
+python-multipart==0.0.6
+EOF
+fi
+
+# Ensure we're in virtual environment
+if [ -z "$VIRTUAL_ENV" ]; then
+    source "$USER_VENV_PATH/bin/activate"
+fi
+
+# Install with ARM64 optimizations in virtual environment
+print_status "Installing Python packages in virtual environment..."
+pip install --timeout=300 -r requirements-pi4.txt || {
+    print_warning "Some packages failed, installing core packages only..."
+    pip install fastapi uvicorn python-dotenv requests beautifulsoup4 supabase pydantic
+}
+
 cd ..
 
 # Build frontend with memory considerations
 print_step "Building frontend (ARM64 optimized)..."
+
+# Fix Node.js permissions if installed manually
+if [ -d "/usr/local/bin" ]; then
+    sudo chown -R $USER:$USER /usr/local/lib/node_modules 2>/dev/null || true
+    sudo chmod -R 755 /usr/local/bin/node /usr/local/bin/npm 2>/dev/null || true
+fi
+
+# Fix local node_modules permissions
+chmod -R 755 node_modules/.bin 2>/dev/null || true
+
 # Limit Node.js memory for Raspberry Pi
 export NODE_OPTIONS="--max-old-space-size=1536"
-npm run build
+
+# Remove NODE_ENV from .env if it exists to avoid Vite warning
+if [ -f ".env" ]; then
+    sed -i '/^NODE_ENV=/d' .env
+    print_status "Removed NODE_ENV from .env file"
+fi
+
+# Install terser for production builds (required since Vite v3)
+print_status "Installing terser for production builds..."
+npm install --save-dev terser
+if [ $? -ne 0 ]; then
+    print_warning "Failed to install terser, build may fail!"
+fi
+
+# Use npx to ensure proper vite execution
+print_status "Building with npx vite..."
+## Remove NODE_ENV from .env.production as well (Vite warns when NODE_ENV is in env files)
+if [ -f ".env.production" ]; then
+    sed -i '/^NODE_ENV=/d' .env.production || true
+    print_status "Removed NODE_ENV from .env.production file"
+fi
+
+# Run build with NODE_ENV set in process environment (not in .env files)
+if ! NODE_ENV=production npx vite build; then
+    print_warning "npx vite failed, trying alternative methods..."
+    
+    # Method 1: Install terser and retry
+    print_status "Installing terser and retrying..."
+    npm install --save-dev terser
+    if ! npx vite build; then
+        # Method 2: Try direct node_modules execution
+        if [ -f "node_modules/.bin/vite" ]; then
+            print_status "Trying direct vite execution..."
+            chmod +x node_modules/.bin/vite
+            ./node_modules/.bin/vite build
+        else
+            print_error "Vite not found in node_modules"
+            exit 1
+        fi
+    fi
+fi
 
 # Get domain name
 read -p "Enter your domain name (e.g., nba-analytics.your-pi-domain.com) or press Enter for local IP: " DOMAIN_NAME
@@ -428,13 +535,13 @@ fi
 print_step "Creating ARM64-optimized Caddyfile..."
 cat > /tmp/Caddyfile.pi << EOF
 # NBA Analytics - Raspberry Pi 4 ARM64 Optimized Caddyfile
-$DOMAIN_NAME {
+${DOMAIN_NAME} {
     # ARM64/Pi4 optimizations - reduced worker processes
-    
+
     # Security headers (lighter for Pi)
     header {
         X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"  
+        X-Content-Type-Options "nosniff"
         X-XSS-Protection "1; mode=block"
         -Server
     }
@@ -447,9 +554,9 @@ $DOMAIN_NAME {
 
     # Health check endpoint
     handle /health {
-        respond "healthy - Pi4 ARM64" 200 {
-            header Content-Type "text/plain"
-        }
+        respond "healthy - Pi4 ARM64" 200
+        # Set a header for the response
+        header Content-Type "text/plain"
     }
 
     # Backend API proxy with ARM64 timeouts
@@ -459,12 +566,12 @@ $DOMAIN_NAME {
             health_uri /health
             health_interval 45s
             health_timeout 15s
-            
+
             header_up Host {upstream_hostport}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_addr}
+            header_up X-Forwarded-For {remote_addr}
             header_up X-Forwarded-Proto {scheme}
-            
+
             # ARM64 timeout settings
             transport http {
                 dial_timeout 10s
@@ -476,9 +583,9 @@ $DOMAIN_NAME {
     # Frontend static files
     handle {
         try_files {path} /index.html
-        root * $APP_DIR/dist
+        root * ${APP_DIR}/dist
         file_server
-        
+
         # Cache static assets (lighter caching for Pi)
         @static {
             path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg
@@ -488,13 +595,9 @@ $DOMAIN_NAME {
         }
     }
 
-    # Lighter logging for ARM64
+    # Simplified logging for ARM64
     log {
-        output file /var/log/caddy/nba-analytics.log {
-            roll_size 50mb
-            roll_keep 3
-            roll_keep_for 168h
-        }
+        output file /var/log/caddy/nba-analytics.log
         level WARN
     }
 }
@@ -504,7 +607,7 @@ $DOMAIN_NAME {
     handle /api/* {
         reverse_proxy 127.0.0.1:8000
     }
-    
+
     handle {
         reverse_proxy 127.0.0.1:5173
     }
@@ -528,7 +631,7 @@ fi
 # Setup ARM64-optimized systemd services
 print_step "Setting up ARM64-optimized systemd services..."
 
-# Backend service with ARM64 optimizations
+# Backend service with ARM64 optimizations and virtual environment
 sudo tee /etc/systemd/system/nba-backend.service > /dev/null <<EOF
 [Unit]
 Description=NBA Analytics Backend (ARM64)
@@ -538,12 +641,13 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR/backend
-Environment=PATH=/usr/bin:/usr/local/bin:$HOME/.local/bin
+Environment=PATH=$USER_VENV_PATH/bin:/usr/bin:/usr/local/bin
 Environment=PYTHONPATH=$APP_DIR/backend
 Environment=PYTHONUNBUFFERED=1
+Environment=VIRTUAL_ENV=$USER_VENV_PATH
 EnvironmentFile=$APP_DIR/.env.production
-# ARM64 optimizations
-ExecStart=/home/$USER/.local/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --loop asyncio
+# ARM64 optimizations with virtual environment
+ExecStart=$USER_VENV_PATH/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --loop asyncio
 Restart=always
 RestartSec=15
 # Memory limits for Pi4

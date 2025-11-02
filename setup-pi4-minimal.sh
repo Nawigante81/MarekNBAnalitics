@@ -64,6 +64,12 @@ if ! command -v node &> /dev/null; then
     sudo tar -xJf node.tar.xz -C /usr/local --strip-components=1
     rm node.tar.xz
     
+    # Fix permissions
+    sudo chown -R root:root /usr/local/bin/node /usr/local/bin/npm
+    sudo chmod 755 /usr/local/bin/node /usr/local/bin/npm
+    sudo mkdir -p /usr/local/lib/node_modules
+    sudo chown -R $USER:$USER /usr/local/lib/node_modules
+    
     # Add to PATH
     export PATH="/usr/local/bin:$PATH"
     echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
@@ -104,8 +110,30 @@ fi
 print_status "Installing frontend dependencies..."
 npm install --timeout=300000
 
-# Install backend dependencies
-print_status "Installing backend dependencies..."
+# Install terser for production builds (required since Vite v3)
+print_status "Installing terser for production builds..."
+npm install --save-dev terser --timeout=300000
+
+# Install backend dependencies using virtual environment
+print_status "Setting up Python virtual environment..."
+
+# Install python3-venv if needed
+sudo apt-get install -y python3-venv python3-full || true
+
+# Create virtual environment in user directory
+USER_VENV_PATH="$HOME/nba-analytics-venv"
+if [ ! -d "$USER_VENV_PATH" ]; then
+    python3 -m venv "$USER_VENV_PATH" || {
+        print_error "Failed to create virtual environment"
+        exit 1
+    }
+    print_status "Virtual environment created ✅"
+fi
+
+# Activate virtual environment
+source "$USER_VENV_PATH/bin/activate"
+
+print_status "Installing backend dependencies in virtual environment..."
 cd backend
 
 # Create minimal requirements file
@@ -121,13 +149,59 @@ supabase==2.4.0
 pydantic==2.12.3
 EOF
 
-python3 -m pip install --user --timeout=300 -r requirements-minimal.txt
+# Install in virtual environment
+pip install --timeout=300 -r requirements-minimal.txt || {
+    print_warning "Some packages failed, installing core only..."
+    pip install fastapi uvicorn python-dotenv requests supabase pydantic
+}
+
 cd ..
 
 # Build frontend
 print_status "Building frontend..."
+
+# Fix Node.js permissions if needed
+if [ -d "/usr/local/bin" ]; then
+    sudo chown -R $USER:$USER /usr/local/lib/node_modules 2>/dev/null || true
+    sudo chmod -R 755 /usr/local/bin/node /usr/local/bin/npm 2>/dev/null || true
+fi
+
+# Fix local permissions
+chmod -R 755 node_modules/.bin 2>/dev/null || true
+
 export NODE_OPTIONS="--max-old-space-size=1024"
-npm run build
+
+## Remove NODE_ENV from .env files to avoid Vite warning (NODE_ENV should be set in process env or config)
+if [ -f ".env" ]; then
+    sed -i '/^NODE_ENV=/d' .env || true
+    print_status "Removed NODE_ENV from .env file"
+fi
+if [ -f ".env.production" ]; then
+    sed -i '/^NODE_ENV=/d' .env.production || true
+    print_status "Removed NODE_ENV from .env.production file"
+fi
+
+# Ensure terser present
+print_status "Ensuring terser is installed..."
+npm install --save-dev terser --timeout=300000 || print_warning "Failed to install terser"
+
+# Use npx to build with NODE_ENV set in the process environment (not in .env files)
+if ! NODE_ENV=production npx vite build; then
+    print_warning "npx vite failed, trying alternative..."
+    
+    # Try installing terser and retry
+    print_status "Installing terser and retrying..."
+    npm install --save-dev terser --timeout=300000 || true
+    if ! NODE_ENV=production npx vite build; then
+        if [ -f "node_modules/.bin/vite" ]; then
+            chmod +x node_modules/.bin/vite
+            ./node_modules/.bin/vite build
+        else
+            print_error "Vite not found"
+            exit 1
+        fi
+    fi
+fi
 
 # Create basic systemd services
 print_status "Creating systemd services..."
@@ -143,7 +217,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR/backend
 Environment=PYTHONPATH=$APP_DIR/backend
-ExecStart=/home/$USER/.local/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+ExecStart=/home/$USER/nba-analytics-venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
 
