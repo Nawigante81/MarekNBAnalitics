@@ -9,11 +9,15 @@ ENV PYTHONPATH=/app
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for Debian
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc \
         curl \
+        build-essential \
+        python3-dev \
+        libffi-dev \
+        libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

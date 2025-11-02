@@ -107,19 +107,17 @@ ssl/fullchain.pem
 ssl/privkey.pem
 ```
 
-### 2. Firewall Configuration
+### 2. Firewall Configuration (Debian/Ubuntu)
 ```bash
-# Ubuntu/Debian
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw allow 8000
-sudo ufw enable
+# UFW Firewall (default on Debian/Ubuntu)
+sudo ufw allow ssh
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 8000/tcp
+sudo ufw --force enable
 
-# CentOS/RHEL
-sudo firewall-cmd --permanent --add-port=80/tcp
-sudo firewall-cmd --permanent --add-port=443/tcp
-sudo firewall-cmd --permanent --add-port=8000/tcp
-sudo firewall-cmd --reload
+# Check firewall status
+sudo ufw status verbose
 ```
 
 ### 3. Nginx Reverse Proxy
