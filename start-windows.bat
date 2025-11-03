@@ -43,7 +43,8 @@ echo.
 echo 🚀 Starting Frontend (React + Vite)...
 echo    Frontend will be available at: http://localhost:5173
 echo.
-start "NBA Analytics - Frontend" cmd /k "npm run dev"
+REM Note: /k keeps window open so you can see logs and stop with Ctrl+C
+start "NBA Analytics - Frontend" cmd /k "npm run dev || (echo ❌ Failed to start frontend && pause)"
 
 timeout /t 2 /nobreak > nul
 
@@ -52,7 +53,8 @@ echo 🐍 Starting Backend (FastAPI)...
 echo    Backend API will be available at: http://localhost:8000
 echo    API Documentation: http://localhost:8000/docs
 echo.
-start "NBA Analytics - Backend" cmd /k "cd backend && venv\Scripts\activate && python main.py"
+REM Note: /k keeps window open so you can see logs and stop with Ctrl+C
+start "NBA Analytics - Backend" cmd /k "cd backend && if exist venv\Scripts\activate.bat (venv\Scripts\activate && python main.py) else (echo ❌ Virtual environment not found! && pause)"
 
 timeout /t 3 /nobreak > nul
 
