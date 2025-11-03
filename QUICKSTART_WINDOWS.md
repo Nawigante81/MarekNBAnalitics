@@ -30,17 +30,32 @@ setup.bat
 
 ## 🎮 Uruchomienie aplikacji
 
-### Metoda 1: Skrypt startowy (najłatwiejsza)
-Kliknij dwukrotnie na:
+### Metoda 1: Docker (najłatwiejsza) 🐳 ⭐
+```
+docker-start.bat
+```
+**Wymagania:** Docker Desktop for Windows
+
+**Zalety:**
+- ✅ Nie musisz instalować Node.js ani Python
+- ✅ Kompletna izolacja (nie zamula systemu)
+- ✅ Identyczne środowisko jak w produkcji
+- ✅ Backend (FastAPI) na http://localhost:8000
+- ✅ Frontend (React) na http://localhost
+
+### Metoda 2: Skrypt natywny
 ```
 start.bat
 ```
+**Wymagania:** Node.js + Python zainstalowane
 
-To automatycznie uruchomi:
-- ✅ Backend (Python/FastAPI) na http://localhost:8000
-- ✅ Frontend (React) na http://localhost:5173
+**Zalety:**
+- ✅ Szybsze dla development
+- ✅ Łatwiejsze debugowanie
+- ✅ Backend na http://localhost:8000  
+- ✅ Frontend na http://localhost:5173
 
-### Metoda 2: Ręczne uruchomienie
+### Metoda 3: Ręczne uruchomienie
 
 **Terminal 1 - Backend:**
 ```cmd
@@ -77,10 +92,16 @@ Lub zamknij okna terminali (Ctrl+C w każdym oknie).
 ## 🌐 Dostęp do aplikacji
 
 Po uruchomieniu:
+
+**Docker (docker-start.bat):**
+- 🎨 **Dashboard**: http://localhost
+- 🔌 **API**: http://localhost:8000
+- 📚 **API Docs**: http://localhost:8000/docs
+
+**Native (start.bat):**
 - 🎨 **Dashboard**: http://localhost:5173
 - 🔌 **API**: http://localhost:8000
 - 📚 **API Docs**: http://localhost:8000/docs
-- ⚡ **Health Check**: http://localhost:8000/health
 
 ---
 
