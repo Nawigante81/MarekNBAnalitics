@@ -161,9 +161,27 @@ npm install
 
 ### ❌ Backend nie łączy się z bazą
 **Rozwiązanie:**
-1. Sprawdź klucze w `.env`
+1. Sprawdź czy `.env` ma poprawne klucze
 2. Sprawdź czy projekt Supabase jest aktywny
 3. Zobacz logi w terminalu backendu
+
+### ❌ ModuleNotFoundError: No module named 'fastapi'
+**Rozwiązanie:**
+```powershell
+# Pakiety nie są zainstalowane w venv!
+cd backend
+.\venv\Scripts\Activate.ps1  # PowerShell
+# LUB
+venv\Scripts\activate.bat     # Command Prompt
+
+# Zainstaluj w venv
+pip install -r requirements.txt
+
+# Sprawdź
+pip list | findstr fastapi
+```
+
+📖 **Szczegóły:** [TROUBLESHOOTING_VENV.md](TROUBLESHOOTING_VENV.md)
 
 ---
 
