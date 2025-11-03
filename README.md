@@ -80,11 +80,35 @@ Primary analysis focus on 9 key teams:
 
 ## Setup & Installation
 
+> 🪟 **Windows 11 Users**: See the detailed [Windows 11 + VS Code Setup Guide](WINDOWS11-VSCODE-SETUP.md) for step-by-step instructions with Visual Studio Code.
+
 ### Prerequisites
-- Docker and Docker Compose
+- Docker and Docker Compose (or Node.js + Python for local development)
 - Supabase project with tables created
 - The Odds API key
 - Environment variables configured
+
+### Quick Start for Windows 11
+
+```cmd
+# 1. Run the setup script
+setup.bat
+
+# 2. Configure your API keys in .env file
+copy .env.example .env
+# Edit .env with your credentials
+
+# 3. Start the application
+# Terminal 1 - Frontend
+npm run dev
+
+# Terminal 2 - Backend
+cd backend
+venv\Scripts\activate
+python main.py
+```
+
+For detailed instructions, see [WINDOWS11-VSCODE-SETUP.md](WINDOWS11-VSCODE-SETUP.md).
 
 ### 1. Environment Configuration
 
