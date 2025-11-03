@@ -4,14 +4,23 @@ FROM node:18-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Create non-root user for builder stage
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# Copy package files first for better layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (include devDependencies for build step)
+# Use npm ci for faster, reliable, reproducible builds
+RUN npm ci --silent --no-audit --no-fund
 
 # Copy source code
 COPY . .
+
+# Change ownership to non-root user
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
 # Build the app
 RUN npm run build
