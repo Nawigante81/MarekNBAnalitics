@@ -54,6 +54,13 @@ python main.py
 npm run dev
 ```
 
+> **💡 Tip:** Jeśli potrzebujesz ręcznie zainstalować zależności Python:
+> ```cmd
+> cd backend
+> venv\Scripts\activate
+> pip install -r requirements.txt
+> ```
+
 ---
 
 ## 🛑 Zatrzymanie aplikacji

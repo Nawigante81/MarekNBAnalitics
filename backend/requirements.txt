@@ -8,7 +8,7 @@ asyncpg==0.29.0
 
 # Async & Scheduling
 APScheduler==3.10.4
-anyio==4.1.1
+anyio==4.1.0
 
 # HTTP Requests & Web Scraping
 aiohttp==3.9.1
@@ -21,7 +21,7 @@ pandas==2.1.4
 numpy==1.24.3
 
 # Timezone Support
-pytz==2023.3
+pytz==2023.3.post1
 
 # Environment Variables
 python-dotenv==1.0.0
