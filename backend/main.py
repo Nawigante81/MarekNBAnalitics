@@ -9,45 +9,52 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import anyio
-from supabase import create_client, Client
+# Import supabase through isolated client to avoid conflicts
+from supabase_client import create_isolated_supabase_client, get_supabase_config
+from typing import Any as Client  # Use Any as Client placeholder to fix typing
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
-try:
-    from scrapers import scrape_all_data, get_bulls_players_data, save_bulls_players
-    from reports import NBAReportGenerator
-except ImportError:
-    # For development/testing when modules might not be available
-    def scrape_all_data(*args, **kwargs):
-        print("Mock scraper function called")
-        return {}
+# Temporarily use mock implementations to avoid httpx_socks conflicts with supabase
+# These will be loaded dynamically when needed
+def scrape_all_data(*args, **kwargs):
+    """Mock scraper function - will be replaced with real implementation"""
+    logger.info("Using mock scraper - anti-bot functionality disabled for now")
+    return {}
+
+class NBAReportGenerator:
+    """Mock report generator - will be replaced with real implementation"""
+    def __init__(self, supabase_client):
+        self.supabase = supabase_client
+        logger.info("Using mock report generator")
     
-    class NBAReportGenerator:
-        def __init__(self, supabase_client):
-            self.supabase = supabase_client
-        
-        async def generate_750am_report(self):
-            return {"report_type": "750am_mock", "timestamp": datetime.now().isoformat()}
-        
-        async def generate_800am_report(self):
-            return {"report_type": "800am_mock", "timestamp": datetime.now().isoformat()}
-        
-        async def generate_1100am_report(self):
-            return {"report_type": "1100am_mock", "timestamp": datetime.now().isoformat()}
-        
-        async def _bulls_gameday_analysis(self):
-            return {"mock": "bulls_analysis"}
-        
-        async def _comprehensive_betting_strategy(self):
-            return {"mock": "betting_strategy"}
-        
-        def calculate_kelly_criterion(self, prob, odds):
-            return max(0, min((prob * odds - 1) / (odds - 1) * 0.25, 0.25))
-        
-        def format_betting_slip(self, bets, stake):
-            return {"mock": "betting_slip", "total_stake": stake}
+    async def generate_750am_report(self):
+        return {"report_type": "750am_mock", "timestamp": datetime.now().isoformat()}
+    
+    async def generate_800am_report(self):
+        return {"report_type": "800am_mock", "timestamp": datetime.now().isoformat()}
+    
+    async def generate_1100am_report(self):
+        return {"report_type": "1100am_mock", "timestamp": datetime.now().isoformat()}
+    
+    async def _bulls_gameday_analysis(self):
+        return {"mock": "bulls_analysis"}
+    
+    async def _comprehensive_betting_strategy(self):
+        return {"mock": "betting_strategy"}
+    
+    def calculate_kelly_criterion(self, prob, odds):
+        return max(0, min((prob * odds - 1) / (odds - 1) * 0.25, 0.25))
+    
+    def format_betting_slip(self, bets, stake):
+        return {"mock": "betting_slip", "total_stake": stake}
+    
+    async def save_report(self, report, report_type):
+        """Mock save report"""
+        logger.info(f"Mock saving report: {report_type}")
+        return True
         
         def calculate_roi_projection(self, history):
             return {"roi": 0, "total_bets": 0, "win_rate": 0}
@@ -61,8 +68,10 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("VITE_SUPABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("VITE_SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 SCRAPE_INTERVAL_SECONDS = 6 * 60 * 60
 CHICAGO_TZ = pytz.timezone("America/Chicago")
 
@@ -120,25 +129,52 @@ async def generate_1100am_report(supabase: Client):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage app lifecycle - startup and shutdown"""
+    # Initialize Supabase client first  
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        config = get_supabase_config()
+        
+        if not config["available"]:
+            raise ValueError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+            
+        # Use SERVICE_ROLE_KEY for backend operations (has elevated privileges)
+        service_key = config["service_key"] or config["anon_key"]
+        supabase = create_isolated_supabase_client(config["url"], service_key)
         app.state.supabase = supabase
-        print("Starting application with Supabase...")
+        
+        if config["service_key"]:
+            print("✅ Starting application with Supabase (Service Role)")
+        else:
+            print("⚠️ Starting application with Supabase (Anon Key - limited permissions)")
+        
+        # Import scrapers after Supabase client is created to avoid conflicts
+        try:
+            from scrapers import scrape_all_data as real_scrape_all_data
+            from reports import NBAReportGenerator as RealNBAReportGenerator
+            
+            # Replace mock functions with real implementations
+            global scrape_all_data, NBAReportGenerator
+            scrape_all_data = real_scrape_all_data
+            NBAReportGenerator = RealNBAReportGenerator
+            print("✅ Anti-bot scraping system loaded")
+            
+        except ImportError as ie:
+            print(f"⚠️ Scrapers not available: {ie}")
         
         # Start data scraping on startup (only if enabled)
         if os.getenv("AUTO_SCRAPE_ON_START", "false").lower() == "true":
             await scrape_all_data(supabase)
         else:
             print("Automatic scraping on startup disabled. Use /api/scrape endpoints to trigger manually.")
+            
     except Exception as e:
-        print(f"Error initializing Supabase: {e}")
+        print(f"❌ Error initializing Supabase: {e}")
         print("Running in development mode without Supabase...")
         app.state.supabase = None
 
-    # Set up scheduler for reports only if Supabase is available and scheduling is enabled
+    # Set up scheduler for reports if scheduling is enabled (even without Supabase in dev mode)
     scheduler_enabled = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
     
-    if app.state.supabase is not None and scheduler_enabled:
+    if scheduler_enabled:
         scheduler = AsyncIOScheduler(timezone=CHICAGO_TZ)
 
         scheduler.add_job(
@@ -163,14 +199,17 @@ async def lifespan(app: FastAPI):
         )
 
         scheduler.start()
+        print("✅ Scheduler enabled and running")
 
-        app.state.stop_evt = asyncio.Event()
-        task = asyncio.create_task(scrape_loop(app.state.supabase, app.state.stop_evt))
-    else:
-        if not scheduler_enabled:
-            print("Scheduler disabled - set ENABLE_SCHEDULER=true to enable")
+        if app.state.supabase:
+            app.state.stop_evt = asyncio.Event()
+            task = asyncio.create_task(scrape_loop(app.state.supabase, app.state.stop_evt))
+            print("✅ Background scraping task started")
         else:
-            print("Scheduler disabled in development mode")
+            print("⚠️ Background scraping disabled - no Supabase connection")
+            task = None
+    else:
+        print("❌ Scheduler disabled - set ENABLE_SCHEDULER=true to enable")
         scheduler = None
         task = None
 

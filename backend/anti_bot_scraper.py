@@ -139,7 +139,7 @@ class AntiBottingScraper:
         """Get proxy transport if available"""
         if not self.proxy_list:
             return None
-            
+        
         proxy = self.proxy_list[self.current_proxy_index % len(self.proxy_list)]
         self.current_proxy_index += 1
         
@@ -148,7 +148,7 @@ class AntiBottingScraper:
         except Exception as e:
             logger.warning(f"Failed to create proxy transport: {e}")
             return None
-    
+
     async def make_request(self, url: str, method: str = 'GET', **kwargs) -> Optional[httpx.Response]:
         """Make request with full anti-detection measures"""
         headers = self.get_random_headers()
