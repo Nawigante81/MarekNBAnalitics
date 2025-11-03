@@ -1,5 +1,7 @@
 # 🚀 Quick Start Guide - NBA Analysis & Betting System
 
+> 🪟 **Windows 11 + VS Code Users**: For a complete step-by-step guide with Visual Studio Code, see [WINDOWS11-VSCODE-SETUP.md](WINDOWS11-VSCODE-SETUP.md)
+
 ## Immediate Setup (5 minutes)
 
 1. **Clone and setup**

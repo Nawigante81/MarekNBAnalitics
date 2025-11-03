@@ -52,13 +52,48 @@ if %errorlevel% neq 0 (
 
 cd ..
 
+REM Check if .env file exists, if not create from example
+if not exist ".env" (
+    if exist ".env.example" (
+        echo 📝 Creating .env file from .env.example...
+        copy .env.example .env
+        echo ⚠️  IMPORTANT: Edit .env file with your API keys!
+    )
+)
+
+REM Check if VS Code is installed
+where code >nul 2>&1
+if %errorlevel% equ 0 (
+    set VSCODE_INSTALLED=1
+    echo.
+    echo ✅ Visual Studio Code detected
+) else (
+    set VSCODE_INSTALLED=0
+    echo.
+    echo ℹ️  Visual Studio Code not found in PATH
+)
+
 echo.
 echo 🎯 Setup completed successfully!
 echo.
 echo 📋 Next Steps:
 echo 1. Configure your .env file with Supabase and API keys
 echo 2. Run 'npm run dev' to start the frontend
-echo 3. Run 'cd backend ^&^& python main.py' to start the backend
+echo 3. Run 'cd backend ^&^& venv\Scripts\activate ^&^& python main.py' to start the backend
+echo.
+if %VSCODE_INSTALLED% equ 1 (
+    echo 💡 VS Code Tips:
+    echo    - Open project: code .
+    echo    - Use integrated terminal: Ctrl+`
+    echo    - Run task: Ctrl+Shift+P ^> "Tasks: Run Task"
+    echo    - See WINDOWS11-VSCODE-SETUP.md for full guide
+    echo.
+    choice /C YN /M "Do you want to open this project in VS Code now"
+    if %errorlevel% equ 1 (
+        echo 🚀 Opening project in Visual Studio Code...
+        code .
+    )
+)
 echo.
 echo 🚀 Happy betting and may the odds be ever in your favor!
 echo.
