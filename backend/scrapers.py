@@ -5,43 +5,27 @@ from supabase import Client
 from datetime import datetime
 import asyncio
 import anyio
+import re
+import logging
+
+# Import our advanced anti-bot scraper
+from anti_bot_scraper import BasketballReferenceScraper, scrape_nba_teams, scrape_bulls_players
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def get_teams_data():
-    """Scrape NBA teams from Basketball-Reference"""
-    async with httpx.AsyncClient() as client:
-        url = "https://www.basketball-reference.com/teams/"
-        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.content, "html.parser")
-        teams = []
-        table = soup.find("table", {"id": "teams_active"})
-
-        if not table:
-            return teams
-
-        for row in table.find_all("tr")[1:]:
-            th = row.find("th")
-            if not th:
-                continue
-
-            a = th.find("a")
-            if not a:
-                continue
-
-            abbreviation = a["href"].split("/")[-2]
-            full_name = a.text.strip()
-            parts = full_name.split()
-
-            teams.append({
-                "abbreviation": abbreviation.upper(),
-                "full_name": full_name,
-                "name": parts[-1] if parts else "",
-                "city": " ".join(parts[:-1]) if len(parts) > 1 else "",
-            })
-
+    """Scrape NBA teams from Basketball-Reference using anti-bot protection"""
+    try:
+        logger.info("Starting teams data scraping with anti-bot protection")
+        teams = await scrape_nba_teams()
+        logger.info(f"Successfully scraped {len(teams)} teams")
         return teams
+    except Exception as e:
+        logger.error(f"Failed to scrape teams data: {e}")
+        return []
 
 
 async def save_teams(supabase: Client, teams: list):
@@ -183,3 +167,256 @@ async def scrape_all_data(supabase: Client):
         print(f"[{datetime.now().isoformat()}] Scrape completed successfully")
     except Exception as e:
         print(f"Error during scrape: {e}")
+
+
+async def get_team_roster(team_abbrev: str, season: str = "2025"):
+    """Scrape team roster from Basketball-Reference"""
+    async with httpx.AsyncClient() as client:
+        url = f"https://www.basketball-reference.com/teams/{team_abbrev.upper()}/{season}.html"
+        
+        try:
+            response = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            print(f"Failed to fetch roster for {team_abbrev}: {e}")
+            return []
+
+        soup = BeautifulSoup(response.content, "html.parser")
+        players = []
+        
+        # Find the roster table
+        roster_table = soup.find("table", {"id": "roster"})
+        if not roster_table:
+            print(f"No roster table found for {team_abbrev}")
+            return players
+
+        for row in roster_table.find_all("tr")[1:]:  # Skip header
+            cells = row.find_all(["td", "th"])
+            if len(cells) < 6:
+                continue
+                
+            try:
+                # Extract player data from Basketball-Reference roster table
+                player_link = cells[1].find("a")
+                if not player_link:
+                    continue
+                    
+                name = player_link.text.strip()
+                basketball_reference_url = "https://www.basketball-reference.com" + player_link["href"]
+                
+                # Extract Basketball-Reference ID from URL (e.g., /players/j/jamesle01.html -> jamesle01)
+                basketball_reference_id = player_link["href"].split("/")[-1].replace(".html", "")
+                
+                # Parse other data
+                jersey_number = cells[0].text.strip()
+                try:
+                    jersey_number = int(jersey_number) if jersey_number.isdigit() else None
+                except:
+                    jersey_number = None
+                    
+                position = cells[2].text.strip() if len(cells) > 2 else ""
+                height = cells[3].text.strip() if len(cells) > 3 else ""
+                weight_text = cells[4].text.strip() if len(cells) > 4 else ""
+                
+                # Parse weight
+                weight = None
+                if weight_text:
+                    weight_match = re.search(r'(\d+)', weight_text)
+                    if weight_match:
+                        weight = int(weight_match.group(1))
+                
+                # Birth date (if available)
+                birth_date = None
+                birth_text = cells[5].text.strip() if len(cells) > 5 else ""
+                if birth_text and len(birth_text) > 4:
+                    try:
+                        # Try to parse date in format like "January 1, 1990"
+                        from datetime import datetime as dt
+                        birth_date = dt.strptime(birth_text, "%B %d, %Y").date().isoformat()
+                    except:
+                        # If parsing fails, store as text for manual review
+                        pass
+                
+                # Experience (if available in table)
+                experience = None
+                if len(cells) > 7:
+                    exp_text = cells[7].text.strip()
+                    if exp_text.isdigit():
+                        experience = int(exp_text)
+                    elif exp_text == "R":  # Rookie
+                        experience = 0
+                
+                # College (if available)
+                college = ""
+                if len(cells) > 6:
+                    college = cells[6].text.strip()
+                
+                player_data = {
+                    "name": name,
+                    "team_abbreviation": team_abbrev.upper(),
+                    "jersey_number": jersey_number,
+                    "position": position,
+                    "height": height,
+                    "weight": weight,
+                    "birth_date": birth_date,
+                    "experience": experience,
+                    "college": college,
+                    "basketball_reference_id": basketball_reference_id,
+                    "basketball_reference_url": basketball_reference_url,
+                    "is_active": True,
+                    "season_year": f"{int(season)-1}-{season[2:]}"  # e.g., 2024-25
+                }
+                
+                players.append(player_data)
+                
+            except Exception as e:
+                print(f"Error parsing player row for {team_abbrev}: {e}")
+                continue
+                
+        print(f"Found {len(players)} players for {team_abbrev}")
+        return players
+
+
+async def save_players(supabase: Client, players: list):
+    """Save players to Supabase database"""
+    if not players:
+        return
+        
+    success_count = 0
+    error_count = 0
+    
+    for player in players:
+        try:
+            # First, get team_id from teams table
+            team_result = await anyio.to_thread.run_sync(
+                lambda: supabase.table("teams")
+                .select("id")
+                .eq("abbreviation", player["team_abbreviation"])
+                .execute()
+            )
+            
+            if team_result.data:
+                player["team_id"] = team_result.data[0]["id"]
+            else:
+                print(f"Warning: Team {player['team_abbreviation']} not found in teams table")
+                player["team_id"] = None
+            
+            # Upsert player data
+            await anyio.to_thread.run_sync(
+                lambda p=player: supabase.table("players").upsert(
+                    [p], on_conflict="name,team_abbreviation,season_year"
+                ).execute()
+            )
+            success_count += 1
+            
+        except Exception as e:
+            print(f"Error saving player {player.get('name', 'Unknown')} ({player.get('team_abbreviation')}): {e}")
+            error_count += 1
+            
+    print(f"Players saved: {success_count} success, {error_count} errors")
+
+
+async def scrape_all_team_rosters(supabase: Client, season: str = "2025"):
+    """Scrape rosters for all teams"""
+    try:
+        print(f"[{datetime.now().isoformat()}] Starting roster scrape for season {season}...")
+        
+        # Get all teams from database
+        teams_result = await anyio.to_thread.run_sync(
+            lambda: supabase.table("teams").select("abbreviation").execute()
+        )
+        
+        if not teams_result.data:
+            print("No teams found in database. Please scrape teams first.")
+            return
+            
+        total_teams = len(teams_result.data)
+        total_players = 0
+        
+        for i, team in enumerate(teams_result.data, 1):
+            team_abbrev = team["abbreviation"]
+            print(f"[{i}/{total_teams}] Scraping roster for {team_abbrev}...")
+            
+            try:
+                players = await get_team_roster(team_abbrev, season)
+                await save_players(supabase, players)
+                total_players += len(players)
+                
+                # Small delay to be respectful to Basketball-Reference
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                print(f"Error scraping roster for {team_abbrev}: {e}")
+                continue
+                
+        print(f"[{datetime.now().isoformat()}] Roster scrape completed: {total_players} players from {total_teams} teams")
+        
+    except Exception as e:
+        print(f"Error during roster scrape: {e}")
+
+
+async def get_bulls_players_data():
+    """Scrape Chicago Bulls players using advanced anti-bot protection"""
+    try:
+        logger.info("Starting Bulls players scraping with anti-bot protection")
+        players = await scrape_bulls_players()
+        logger.info(f"Successfully scraped {len(players)} Bulls players")
+        return players
+    except Exception as e:
+        logger.error(f"Failed to scrape Bulls players: {e}")
+        return []
+
+
+async def save_bulls_players(supabase: Client, players: list):
+    """Save Bulls players to Supabase"""
+    if not players:
+        logger.warning("No Bulls players to save")
+        return
+    
+    try:
+        for player in players:
+            # Add Bulls team ID
+            player['team_abbreviation'] = 'CHI'
+            
+            # Save to players table
+            result = await anyio.to_thread.run_sync(
+                lambda p=player: supabase.table("players").upsert(
+                    [p], on_conflict="name,team_abbreviation"
+                ).execute()
+            )
+            logger.debug(f"Saved player: {player.get('name')}")
+        
+        logger.info(f"Successfully saved {len(players)} Bulls players to database")
+    except Exception as e:
+        logger.error(f"Error saving Bulls players: {e}")
+
+
+async def scrape_all_data(supabase: Client, include_rosters: bool = True):
+    """Main function to scrape all data including rosters"""
+    try:
+        print(f"[{datetime.now().isoformat()}] Starting full scrape...")
+
+        # Scrape teams first
+        teams = await get_teams_data()
+        print(f"Fetched {len(teams)} teams")
+        await save_teams(supabase, teams)
+
+        # Scrape odds
+        odds_data = await get_nba_odds()
+        print(f"Fetched odds for {len(odds_data.get('events', []))} games")
+        await process_odds_data(supabase, odds_data)
+        
+        # Scrape rosters if requested
+        if include_rosters:
+            await scrape_all_team_rosters(supabase)
+        
+        # Specifically scrape Bulls players with advanced anti-bot protection
+        bulls_players = await get_bulls_players_data()
+        if bulls_players:
+            await save_bulls_players(supabase, bulls_players)
+
+        print(f"[{datetime.now().isoformat()}] Full scrape completed successfully")
+    except Exception as e:
+        print(f"Error during full scrape: {e}")

@@ -16,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 
 try:
-    from scrapers import scrape_all_data
+    from scrapers import scrape_all_data, get_bulls_players_data, save_bulls_players
     from reports import NBAReportGenerator
 except ImportError:
     # For development/testing when modules might not be available
@@ -124,14 +124,21 @@ async def lifespan(app: FastAPI):
         supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
         app.state.supabase = supabase
         print("Starting application with Supabase...")
-        await scrape_all_data(supabase)
+        
+        # Start data scraping on startup (only if enabled)
+        if os.getenv("AUTO_SCRAPE_ON_START", "false").lower() == "true":
+            await scrape_all_data(supabase)
+        else:
+            print("Automatic scraping on startup disabled. Use /api/scrape endpoints to trigger manually.")
     except Exception as e:
         print(f"Error initializing Supabase: {e}")
         print("Running in development mode without Supabase...")
         app.state.supabase = None
 
-    # Set up scheduler for reports only if Supabase is available
-    if app.state.supabase is not None:
+    # Set up scheduler for reports only if Supabase is available and scheduling is enabled
+    scheduler_enabled = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
+    
+    if app.state.supabase is not None and scheduler_enabled:
         scheduler = AsyncIOScheduler(timezone=CHICAGO_TZ)
 
         scheduler.add_job(
@@ -160,7 +167,10 @@ async def lifespan(app: FastAPI):
         app.state.stop_evt = asyncio.Event()
         task = asyncio.create_task(scrape_loop(app.state.supabase, app.state.stop_evt))
     else:
-        print("Scheduler disabled in development mode")
+        if not scheduler_enabled:
+            print("Scheduler disabled - set ENABLE_SCHEDULER=true to enable")
+        else:
+            print("Scheduler disabled in development mode")
         scheduler = None
         task = None
 
@@ -241,6 +251,174 @@ async def get_game_odds(game_id: str):
         return {"error": str(e)}, 500
 
 
+@app.get("/api/players")
+async def get_all_players(team: str = None, position: str = None, active: bool = True):
+    """Get all players with optional filters"""
+    try:
+        supabase = app.state.supabase
+        
+        query = supabase.table("players").select("""
+            *,
+            teams!players_team_id_fkey (
+                abbreviation,
+                full_name,
+                city,
+                name
+            )
+        """)
+        
+        if team:
+            query = query.eq("team_abbreviation", team.upper())
+        if position:
+            query = query.ilike("position", f"%{position}%")
+        if active is not None:
+            query = query.eq("is_active", active)
+            
+        # Order by team, then by jersey number
+        query = query.order("team_abbreviation").order("jersey_number")
+        
+        response = await anyio.to_thread.run_sync(lambda: query.execute())
+        return {"players": response.data, "count": len(response.data)}
+    except Exception as e:
+        logger.error(f"Error fetching players: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.get("/api/teams/{team_abbrev}/players")
+async def get_team_players(team_abbrev: str):
+    """Get all players for a specific team"""
+    try:
+        supabase = app.state.supabase
+        
+        response = await anyio.to_thread.run_sync(
+            lambda: supabase.table("players")
+            .select("""
+                *,
+                teams!players_team_id_fkey (
+                    abbreviation,
+                    full_name,
+                    city,
+                    name
+                )
+            """)
+            .eq("team_abbreviation", team_abbrev.upper())
+            .eq("is_active", True)
+            .order("jersey_number")
+            .execute()
+        )
+        
+        if not response.data:
+            # Check if team exists
+            team_check = await anyio.to_thread.run_sync(
+                lambda: supabase.table("teams")
+                .select("abbreviation")
+                .eq("abbreviation", team_abbrev.upper())
+                .execute()
+            )
+            
+            if not team_check.data:
+                raise HTTPException(status_code=404, detail=f"Team '{team_abbrev}' not found")
+            else:
+                return {"players": [], "count": 0, "message": f"No active players found for {team_abbrev}"}
+        
+        return {
+            "team": team_abbrev.upper(),
+            "players": response.data, 
+            "count": len(response.data)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching team players: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.get("/api/players/{player_id}")
+async def get_player_details(player_id: str):
+    """Get detailed information for a specific player"""
+    try:
+        supabase = app.state.supabase
+        
+        response = await anyio.to_thread.run_sync(
+            lambda: supabase.table("players")
+            .select("""
+                *,
+                teams!players_team_id_fkey (
+                    abbreviation,
+                    full_name,
+                    city,
+                    name
+                )
+            """)
+            .eq("id", player_id)
+            .execute()
+        )
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail=f"Player with ID '{player_id}' not found")
+            
+        return {"player": response.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching player details: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.get("/api/players/search/{name}")
+async def search_players_by_name(name: str):
+    """Search players by name"""
+    try:
+        supabase = app.state.supabase
+        
+        response = await anyio.to_thread.run_sync(
+            lambda: supabase.table("players")
+            .select("""
+                *,
+                teams!players_team_id_fkey (
+                    abbreviation,
+                    full_name,
+                    city,
+                    name
+                )
+            """)
+            .ilike("name", f"%{name}%")
+            .eq("is_active", True)
+            .order("name")
+            .execute()
+        )
+        
+        return {
+            "query": name,
+            "players": response.data, 
+            "count": len(response.data)
+        }
+    except Exception as e:
+        logger.error(f"Error searching players: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.post("/api/scrape/rosters")
+async def trigger_roster_scrape(season: str = "2025"):
+    """Manually trigger roster scraping for all teams"""
+    try:
+        from scrapers import scrape_all_team_rosters
+        
+        supabase = app.state.supabase
+        
+        # Run roster scraping in background
+        asyncio.create_task(scrape_all_team_rosters(supabase, season))
+        
+        return {
+            "message": f"Roster scraping initiated for season {season}",
+            "timestamp": datetime.now().isoformat(),
+            "status": "in_progress"
+        }
+    except Exception as e:
+        logger.error(f"Error triggering roster scrape: {e}")
+        raise HTTPException(status_code=500, detail="Failed to trigger roster scraping")
+
+
 @app.get("/api/status")
 async def get_status():
     """Get application status"""
@@ -298,6 +476,41 @@ async def get_bulls_analysis():
     except Exception as e:
         logger.error(f"Error generating Bulls analysis: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate Bulls analysis")
+
+
+@app.post("/api/scrape/bulls-players")
+async def scrape_bulls_players_endpoint():
+    """Manually trigger Bulls players scraping with anti-bot protection"""
+    try:
+        from scrapers import get_bulls_players_data, save_bulls_players
+        
+        logger.info("Manual Bulls players scraping triggered")
+        supabase = app.state.supabase
+        
+        # Scrape Bulls players using advanced anti-bot protection
+        players = await get_bulls_players_data()
+        
+        if players:
+            await save_bulls_players(supabase, players)
+            logger.info(f"Successfully scraped and saved {len(players)} Bulls players")
+            return {
+                "success": True,
+                "message": f"Successfully scraped {len(players)} Bulls players",
+                "players_count": len(players),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.warning("No Bulls players scraped")
+            return {
+                "success": False,
+                "message": "No Bulls players found or scraping failed",
+                "players_count": 0,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"Error scraping Bulls players: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to scrape Bulls players: {str(e)}")
 
 
 @app.get("/api/betting-recommendations")
@@ -371,6 +584,181 @@ async def get_performance_metrics():
     except Exception as e:
         logger.error(f"Error calculating performance metrics: {e}")
         raise HTTPException(status_code=500, detail="Failed to calculate performance metrics")
+
+
+@app.get("/api/teams/analysis")
+async def get_teams_analysis():
+    """Get comprehensive analysis for all NBA teams"""
+    try:
+        supabase = app.state.supabase
+        
+        # Get all teams with basic info
+        teams_response = await anyio.to_thread.run_sync(
+            lambda: supabase.table("teams").select("*").order("abbreviation").execute()
+        )
+        
+        # Generate mock analysis data for each team (in production, this would come from real data)
+        teams_analysis = []
+        conferences = {
+            'Eastern': ['ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DET', 'IND', 'MIA', 'MIL', 'NYK', 'ORL', 'PHI', 'TOR', 'WAS'],
+            'Western': ['DAL', 'DEN', 'GSW', 'HOU', 'LAC', 'LAL', 'MEM', 'MIN', 'NOP', 'OKC', 'PHX', 'POR', 'SAC', 'SAS', 'UTA']
+        }
+        
+        divisions = {
+            'Atlantic': ['BOS', 'BKN', 'NYK', 'PHI', 'TOR'],
+            'Central': ['CHI', 'CLE', 'DET', 'IND', 'MIL'],
+            'Southeast': ['ATL', 'CHA', 'MIA', 'ORL', 'WAS'],
+            'Northwest': ['DEN', 'MIN', 'OKC', 'POR', 'UTA'],
+            'Pacific': ['GSW', 'LAC', 'LAL', 'PHX', 'SAC'],
+            'Southwest': ['DAL', 'HOU', 'MEM', 'NOP', 'SAS']
+        }
+        
+        for team in teams_response.data:
+            abbr = team['abbreviation']
+            
+            # Determine conference and division
+            conference = 'Eastern' if abbr in conferences['Eastern'] else 'Western'
+            division = next((div for div, teams in divisions.items() if abbr in teams), 'Unknown')
+            
+            # Mock statistics (in production, fetch from games/odds tables)
+            import random
+            wins = random.randint(15, 45)
+            losses = random.randint(15, 45)
+            
+            team_analysis = {
+                **team,
+                'conference': conference,
+                'division': division,
+                'season_stats': {
+                    'wins': wins,
+                    'losses': losses,
+                    'win_percentage': round(wins / (wins + losses), 3),
+                    'points_per_game': round(random.uniform(105, 125), 1),
+                    'points_allowed': round(random.uniform(105, 125), 1),
+                    'offensive_rating': round(random.uniform(105, 125), 1),
+                    'defensive_rating': round(random.uniform(105, 125), 1),
+                    'net_rating': round(random.uniform(-15, 15), 1)
+                },
+                'recent_form': {
+                    'last_10': f"{random.randint(3, 8)}-{random.randint(2, 7)}",
+                    'last_5': f"{random.randint(1, 5)}-{random.randint(0, 4)}",
+                    'home_record': f"{random.randint(8, 25)}-{random.randint(5, 20)}",
+                    'away_record': f"{random.randint(5, 20)}-{random.randint(10, 25)}",
+                    'vs_conference': f"{random.randint(10, 25)}-{random.randint(10, 25)}"
+                },
+                'betting_stats': {
+                    'ats_record': f"{random.randint(25, 35)}-{random.randint(20, 30)}",
+                    'ats_percentage': round(random.uniform(0.45, 0.60), 3),
+                    'over_under': f"{random.randint(25, 35)}-{random.randint(20, 30)}",
+                    'ou_percentage': round(random.uniform(0.45, 0.60), 3),
+                    'avg_total': round(random.uniform(210, 235), 1)
+                },
+                'key_players': [
+                    f"Player {random.randint(1, 50)}",
+                    f"Player {random.randint(1, 50)}",
+                    f"Player {random.randint(1, 50)}"
+                ],
+                'strength_rating': random.randint(65, 95),
+                'last_updated': datetime.now().isoformat()
+            }
+            
+            teams_analysis.append(team_analysis)
+        
+        return {
+            'teams': teams_analysis,
+            'count': len(teams_analysis),
+            'conferences': {
+                'Eastern': [t for t in teams_analysis if t['conference'] == 'Eastern'],
+                'Western': [t for t in teams_analysis if t['conference'] == 'Western']
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching teams analysis: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch teams analysis")
+
+
+@app.get("/api/teams/{team_abbrev}/analysis")
+async def get_team_analysis(team_abbrev: str):
+    """Get detailed analysis for a specific team"""
+    try:
+        supabase = app.state.supabase
+        team_abbrev = team_abbrev.upper()
+        
+        # Get team basic info
+        team_response = await anyio.to_thread.run_sync(
+            lambda: supabase.table("teams")
+            .select("*")
+            .eq("abbreviation", team_abbrev)
+            .single()
+            .execute()
+        )
+        
+        if not team_response.data:
+            raise HTTPException(status_code=404, detail=f"Team '{team_abbrev}' not found")
+        
+        team = team_response.data
+        
+        # Generate comprehensive team analysis
+        import random
+        from datetime import datetime, timedelta
+        
+        # Mock recent games
+        recent_games = []
+        for i in range(5):
+            game_date = datetime.now() - timedelta(days=(i+1)*3)
+            opponent = random.choice(['LAL', 'BOS', 'GSW', 'MIA', 'PHX'])
+            is_home = random.choice([True, False])
+            team_score = random.randint(95, 130)
+            opp_score = random.randint(95, 130)
+            
+            recent_games.append({
+                'date': game_date.strftime('%Y-%m-%d'),
+                'opponent': opponent,
+                'home': is_home,
+                'team_score': team_score,
+                'opponent_score': opp_score,
+                'result': 'W' if team_score > opp_score else 'L',
+                'margin': abs(team_score - opp_score)
+            })
+        
+        # Generate detailed analysis
+        analysis = {
+            **team,
+            'season_record': {
+                'wins': random.randint(20, 45),
+                'losses': random.randint(15, 40),
+                'win_percentage': round(random.uniform(0.35, 0.75), 3)
+            },
+            'advanced_stats': {
+                'offensive_rating': round(random.uniform(105, 125), 1),
+                'defensive_rating': round(random.uniform(105, 125), 1),
+                'net_rating': round(random.uniform(-10, 15), 1),
+                'pace': round(random.uniform(95, 105), 1),
+                'effective_fg_percentage': round(random.uniform(0.50, 0.60), 3),
+                'true_shooting_percentage': round(random.uniform(0.52, 0.62), 3)
+            },
+            'recent_games': recent_games,
+            'form_analysis': {
+                'last_10_games': f"{random.randint(4, 8)}-{random.randint(2, 6)}",
+                'home_form': f"{random.randint(10, 20)}-{random.randint(5, 15)}",
+                'away_form': f"{random.randint(8, 18)}-{random.randint(7, 17)}"
+            },
+            'betting_trends': {
+                'ats_home': f"{random.randint(10, 20)}-{random.randint(8, 18)}",
+                'ats_away': f"{random.randint(8, 18)}-{random.randint(10, 20)}",
+                'over_under_home': f"{random.randint(12, 22)}-{random.randint(8, 18)}"
+            },
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        return analysis
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching team analysis for {team_abbrev}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch team analysis")
 
 
 @app.get("/health")

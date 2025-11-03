@@ -12,8 +12,25 @@ import {
   Zap,
   BarChart3
 } from 'lucide-react';
+import { useApi } from '../services/api';
+import AllTeams from './AllTeams';
 
-interface DashboardProps {}
+type DashboardProps = Record<string, never>;
+
+interface ApiGame {
+  id?: string;
+  home_team?: string;
+  away_team?: string;
+  commence_time?: string;
+}
+
+interface ApiTeam {
+  id: string;
+  name?: string;
+  abbreviation: string;
+  full_name?: string;
+  city?: string;
+}
 
 interface GameData {
   id: string;
@@ -38,63 +55,81 @@ const Dashboard: React.FC<DashboardProps> = () => {
   const [todayGames, setTodayGames] = useState<GameData[]>([]);
   const [focusTeams, setFocusTeams] = useState<TeamStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'all-teams'>('dashboard');
+
+  const apiHook = useApi();
 
   useEffect(() => {
-    // Simulate data fetching
     const fetchData = async () => {
       setLoading(true);
       
-      // Simulate API calls
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        // Fetch real data from API
+        const [gamesData, teamsData] = await Promise.all([
+          apiHook.getTodayGames(),
+          apiHook.getTeams()
+        ]);
+        
+        // Transform games data to match expected format
+        const transformedGames = gamesData.map((game: ApiGame) => ({
+          id: game.id || Math.random().toString(),
+          homeTeam: game.home_team || 'TBD',
+          awayTeam: game.away_team || 'TBD', 
+          time: game.commence_time ? new Date(game.commence_time).toLocaleTimeString() : 'TBD',
+          spread: 0, // Will be populated from odds
+          total: 0, // Will be populated from odds
+          homeOdds: 0, // Will be populated from odds
+          awayOdds: 0 // Will be populated from odds
+        }));
+
+        setTodayGames(transformedGames);
+
+        // Transform teams data for focus teams (mock data if no real analysis yet)
+        const focusTeamsList = teamsData.slice(0, 5).map((team: ApiTeam) => ({
+          team: team.name || team.abbreviation,
+          record: '0-0', // Placeholder - would come from analysis API
+          ats: '0-0', // Placeholder - would come from analysis API  
+          ou: '0-0', // Placeholder - would come from analysis API
+          trend: 'neutral' as const
+        }));
+
+        setFocusTeams(focusTeamsList);
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        
+        // Fallback to demo data if API fails
+        setTodayGames([
+          {
+            id: 'demo-1',
+            homeTeam: 'Chicago Bulls',
+            awayTeam: 'Los Angeles Lakers',
+            time: '8:00 PM EST',
+            spread: -2.5,
+            total: 225.5,
+            homeOdds: -120,
+            awayOdds: +100
+          }
+        ]);
+
+        setFocusTeams([
+          { team: 'Bulls', record: '8-12', ats: '9-11', ou: '12-8', trend: 'up' }
+        ]);
+      }
       
-      setTodayGames([
-        {
-          id: '1',
-          homeTeam: 'Chicago Bulls',
-          awayTeam: 'Los Angeles Lakers',
-          time: '8:00 PM EST',
-          spread: -2.5,
-          total: 225.5,
-          homeOdds: -120,
-          awayOdds: +100
-        },
-        {
-          id: '2',
-          homeTeam: 'Boston Celtics',
-          awayTeam: 'Miami Heat',
-          time: '7:30 PM EST',
-          spread: -5.5,
-          total: 218.5,
-          homeOdds: -240,
-          awayOdds: +200
-        },
-        {
-          id: '3',
-          homeTeam: 'Golden State Warriors',
-          awayTeam: 'Sacramento Kings',
-          time: '10:30 PM EST',
-          spread: -3.5,
-          total: 232.5,
-          homeOdds: -160,
-          awayOdds: +140
-        }
-      ]);
-
-      setFocusTeams([
-        { team: 'Bulls', record: '8-12', ats: '9-11', ou: '12-8', trend: 'up' },
-        { team: 'Celtics', record: '16-4', ats: '13-7', ou: '11-9', trend: 'up' },
-        { team: 'Lakers', record: '12-8', ats: '10-10', ou: '13-7', trend: 'down' },
-        { team: 'Warriors', record: '10-10', ats: '8-12', ou: '14-6', trend: 'neutral' },
-        { team: 'Kings', record: '11-9', ats: '12-8', ou: '10-10', trend: 'up' }
-      ]);
-
       setLoading(false);
     };
 
     fetchData();
-  }, []);
+  }, [apiHook]);
 
-  const StatCard = ({ value, subtitle, icon: Icon, trend, color }: any) => (
+  const StatCard = ({ value, subtitle, icon: Icon, trend, color }: {
+    value: string | number;
+    subtitle: string;
+    icon: React.ElementType;
+    trend?: 'up' | 'down' | 'neutral';
+    color: string;
+  }) => (
     <div className="glass-card p-6 hover:bg-white/10 transition-all duration-300">
       <div className="flex items-center justify-between mb-4">
         <div className={`p-3 rounded-lg ${color}`}>
@@ -168,24 +203,50 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   return (
     <div className="space-y-6">
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Navigation Tabs */}
+      <div className="flex space-x-1 bg-gray-800/50 rounded-lg p-1">
+        <button
+          onClick={() => setActiveSection('dashboard')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeSection === 'dashboard'
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setActiveSection('all-teams')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeSection === 'all-teams'
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          Wszystkie drużyny
+        </button>
+      </div>
+
+      {/* Content based on active section */}
+      {activeSection === 'all-teams' ? (
+        <AllTeams />
+      ) : (
+        <>
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Today's Games"
           value={todayGames.length}
           subtitle="Games scheduled"
           icon={Trophy}
           color="bg-blue-600"
         />
         <StatCard
-          title="Focus Teams"
           value="9"
           subtitle="Teams tracked"
           icon={Users}
           color="bg-green-600"
         />
         <StatCard
-          title="Bulls Record"
           value="8-12"
           subtitle="This season"
           icon={Target}
@@ -193,7 +254,6 @@ const Dashboard: React.FC<DashboardProps> = () => {
           color="bg-red-600"
         />
         <StatCard
-          title="Active Bets"
           value="3"
           subtitle="Value opportunities"
           icon={DollarSign}
@@ -324,6 +384,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

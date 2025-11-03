@@ -53,11 +53,11 @@ function App() {
             <div className="w-20 h-20 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
             <div className="absolute inset-0 w-20 h-20 border-4 border-red-400/20 border-b-red-400 rounded-full animate-spin-reverse mx-auto"></div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">NBA Analysis System</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Analitics for Marek</h2>
           <p className="text-gray-400">Loading real-time data...</p>
           <div className="flex items-center justify-center mt-4 space-x-2">
             <Zap className="w-4 h-4 text-yellow-400 animate-pulse" />
-            <span className="text-sm text-gray-500">Fetching Bulls analysis & odds</span>
+            <span className="text-sm text-gray-500">Fetching NBA analysis & odds</span>
           </div>
         </div>
       </div>

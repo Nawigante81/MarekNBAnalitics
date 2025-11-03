@@ -23,7 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({ items, activeSection, onSectionChange
             <span className="text-white font-bold text-lg">NBA</span>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Bulls Analytics</h1>
+            <h1 className="text-xl font-bold text-white">Analitics for Marek</h1>
             <p className="text-sm text-gray-400">Betting Intelligence</p>
           </div>
         </div>
