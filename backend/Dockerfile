@@ -30,7 +30,6 @@ COPY --chown=app:app requirements.txt .
 
 # Install Python dependencies with optimizations
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir --no-deps -r requirements.txt \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

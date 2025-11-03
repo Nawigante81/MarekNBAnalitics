@@ -60,11 +60,10 @@ COPY nginx-production.conf /etc/nginx/nginx.conf
 # Set proper permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
     chmod -R 755 /usr/share/nginx/html && \
-    chmod -R 755 /var/cache/nginx
-
-# Switch to non-root user
-USER nginx
+    chmod -R 755 /var/cache/nginx && \
+    chmod -R 755 /var/log/nginx
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
