@@ -7,24 +7,30 @@ Szybki przewodnik uruchomienia projektu NBA Analytics na Windows 11.
 ## ⚡ Szybkie uruchomienie (3 kroki)
 
 ### 1️⃣ Zainstaluj wymagania
-- **Node.js**: https://nodejs.org/ (wersja LTS)
-- **Python 3.11+**: https://www.python.org/downloads/ (**zaznacz "Add to PATH"!**)
+
+- **Node.js**: <https://nodejs.org/> (wersja LTS)
+- **Python 3.11+**: <https://www.python.org/downloads/> (**zaznacz "Add to PATH"!**)
 
 ### 2️⃣ Uruchom instalację
+
 Kliknij dwukrotnie na:
-```
+
+```cmd
 setup.bat
 ```
+
 lub w terminalu:
+
 ```cmd
 setup.bat
 ```
 
 ### 3️⃣ Skonfiguruj klucze API
+
 1. Edytuj plik `.env` (zostanie utworzony automatycznie)
 2. Uzupełnij klucze:
-   - Supabase: https://supabase.com/ (załóż darmowe konto)
-   - The Odds API: https://the-odds-api.com/ (darmowy klucz)
+   - Supabase: <https://supabase.com/> (załóż darmowe konto)
+   - The Odds API: <https://the-odds-api.com/> (darmowy klucz)
 
 ---
 

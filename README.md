@@ -78,25 +78,64 @@ Primary analysis focus on 9 key teams:
 └── [frontend files...]
 ```
 
+## 🚀 Quick Start (5 minutes)
+
+### Option 1: Automated Installation (Recommended)
+
+**Windows:**
+
+```cmd
+setup.bat
+start.bat
+```
+
+**Linux/macOS:**
+
+```bash
+chmod +x setup.sh start.sh
+./setup.sh
+./start.sh
+```
+
+### Option 2: Docker Deployment
+
+**Windows:**
+
+```cmd
+docker-start.bat
+```
+
+**Linux/macOS:**
+
+```bash
+docker-compose up -d
+```
+
+### 📖 Detailed Installation Guides
+
+| Platform | Guide | Difficulty |
+|----------|-------|------------|
+| **Windows 11/10** | [QUICKSTART_WINDOWS.md](QUICKSTART_WINDOWS.md) | ⭐ Easy |
+| **Ubuntu/Debian** | [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) | ⭐ Easy |
+| **Raspberry Pi 4** | [RASPBERRY_PI_SETUP.md](RASPBERRY_PI_SETUP.md) | ⭐⭐ Medium |
+| **Docker (Any OS)** | [README.md](#docker-deployment) | ⭐ Easy |
+| **All Platforms** | [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) | ⭐ Easy |
+
 ## Setup & Installation
 
 ### Prerequisites
-- Docker and Docker Compose
-- Supabase project with tables created
-- The Odds API key
-- Environment variables configured
+
+- **Node.js 18+** and **Python 3.8+** (if not using Docker)
+- **Supabase project** with API keys
+- **The Odds API key** (free tier: 500 requests/month)
+- **Docker** (optional, for containerized deployment)
 
 ### 1. Environment Configuration
 
-Create `backend/.env` based on `.env.example`:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Edit `backend/.env` with your credentials:
+The setup scripts will create `.env` files automatically, but you need to add your API keys:
 
 ```env
+# Required API Keys
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ODDS_API_KEY=your-odds-api-key

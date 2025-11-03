@@ -1,37 +1,73 @@
 # 🚀 Quick Start Guide - NBA Analysis & Betting System
 
-## Immediate Setup (5 minutes)
+> **Szybkie uruchomienie w 5 minut dla wszystkich platform**
 
-1. **Clone and setup**
-   ```bash
-   # Windows
-   setup.bat
-   
-   # Mac/Linux
-   chmod +x setup.sh && ./setup.sh
-   ```
+## ⚡ Immediate Setup (5 minutes)
 
-2. **Configure environment**
-   ```bash
-   # Edit .env file with your API keys
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your_anon_key_here
-   ```
+### 1. **Clone and setup**
 
-3. **Run the application**
-   ```bash
-   # Terminal 1 - Frontend
-   npm run dev
-   
-   # Terminal 2 - Backend  
-   cd backend
-   python main.py
-   ```
+**Windows:**
 
-4. **Access the application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+```bash
+setup.bat
+```
+
+**Mac/Linux:**
+
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+### 2. **Configure environment**
+
+Edit `.env` file with your API keys:
+
+```bash
+# Edit .env file with your API keys
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+VITE_ODDS_API_KEY=your_odds_api_key_here
+```
+
+### 3. **Run the application**
+
+**Method 1 - Automated (Recommended):**
+
+```bash
+# Windows
+start.bat
+
+# Linux/Mac  
+./start.sh
+```
+
+**Method 2 - Docker:**
+
+```bash
+# Windows
+docker-start.bat
+
+# Linux/Mac
+docker-compose up -d
+```
+
+**Method 3 - Manual:**
+
+```bash
+# Terminal 1 - Backend
+cd backend && source venv/bin/activate && python main.py
+
+# Terminal 2 - Frontend  
+npm run dev
+```
+
+### 4. **Access the application**
+
+- **Frontend**: <http://localhost:5173>
+- **Backend API**: <http://localhost:8000>
+- **API Documentation**: <http://localhost:8000/docs>
+
+---
 
 ## 🎯 Key Features Available Immediately
 
@@ -41,24 +77,32 @@
 - **Betting Recommendations**: Kelly Criterion optimized suggestions
 - **Live Odds**: Real-time odds monitoring and arbitrage detection
 
+---
+
 ## 🔧 Configuration Options
 
 ### Database (Supabase)
+
 1. Create Supabase project
-2. Import SQL schema from `/database/migrations/`
+2. Import SQL schema from `/supabase/migrations/`
 3. Add connection details to `.env`
 
 ### API Keys
+
 - **The Odds API**: For live betting odds
-- **NBA API**: For player statistics
+- **NBA API**: For player statistics  
 - **Supabase**: For database access
+
+---
 
 ## 📞 Need Help?
 
 - Check the full README.md for detailed setup
-- API Documentation: http://localhost:8000/docs
+- API Documentation: <http://localhost:8000/docs>
 - Frontend runs on port 5173
 - Backend runs on port 8000
+
+---
 
 ## ⚡ Production Deployment
 
@@ -70,4 +114,6 @@ npm run build
 docker-compose up -d
 ```
 
-**Happy Betting! 🏀💰**
+---
+
+## 🏀 Happy Betting! 💰
